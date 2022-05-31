@@ -1,106 +1,62 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
-	"github.com/dgrijalva/jwt-go/v4"
-	"github.com/google/uuid"
+	"SimpleSSO/repository"
+
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/spf13/viper"
 )
 
+type Config struct {
+	Postgres repository.PostgresConfig `json:"postgres"`
+}
+
 func main() {
-	db, err := New()
+
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+	viper.AutomaticEnv()
+	err := viper.ReadInConfig()
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
-	auth := AuthService{db: db}
+	conf := &Config{}
+	err = viper.Unmarshal(conf)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	connStr := fmt.Sprintf("user=%s host=%s port=%d password=%s dbname=%s sslmode=%s",
+		conf.Postgres.Username, conf.Postgres.Host, conf.Postgres.Port, conf.Postgres.Password, conf.Postgres.DBName, conf.Postgres.SSLMode)
+	mconf := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		conf.Postgres.Username, conf.Postgres.Password, conf.Postgres.Host, conf.Postgres.Port, conf.Postgres.DBName, conf.Postgres.SSLMode)
+	fmt.Println(mconf)
+	m, err := migrate.New(
+		"file://migrations",
+		mconf)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	m.Up()
+	db, err := repository.New(connStr)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	auth := AuthService{db: db, secret: "secret"}
 	http.HandleFunc("/login", auth.Login)
 	http.HandleFunc("/registration", auth.Registration)
+	http.HandleFunc("/refreshToken", auth.RefreshToken)
 	s := &http.Server{
 		Addr: ":8080",
 	}
 	err = s.ListenAndServe()
 	fmt.Println(err.Error())
-}
-
-type AuthService struct {
-	db *Repository
-}
-
-func (a *AuthService) Login(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-	decoder := json.NewDecoder(r.Body)
-	user := UserLogin{}
-	err := decoder.Decode(&user)
-	if err != nil {
-		fmt.Fprint(w, err.Error())
-		return
-	}
-	dbUser, err := a.db.GetUser(user.Login)
-	if err != nil {
-		fmt.Fprint(w, err.Error())
-		return
-	}
-	if dbUser.Password != user.Password {
-		fmt.Fprint(w, "invalid password")
-		return
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &Claims{
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: jwt.At(time.Now().Add(time.Hour * 24)),
-			IssuedAt:  jwt.At(time.Now()),
-		},
-		Username: user.Login,
-		Id:       uuid.New().String(),
-	})
-	tokenSign, err := token.SignedString([]byte("test"))
-	if err != nil {
-		fmt.Fprint(w, err.Error())
-		return
-	}
-	fmt.Fprint(w, tokenSign)
-}
-func (a *AuthService) Registration(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-	decoder := json.NewDecoder(r.Body)
-	user := UserLogin{}
-	err := decoder.Decode(&user)
-	if err != nil {
-		fmt.Fprint(w, err.Error())
-		return
-	}
-	_, err = a.db.GetUser(user.Login)
-	if err == nil {
-		fmt.Fprint(w, "InvalidData")
-		return
-	}
-	userdb := User{
-		Login:    user.Login,
-		Password: user.Password,
-	}
-	userRes, err := a.db.SetUser(userdb)
-	if err != nil {
-		fmt.Fprint(w, err.Error())
-		return
-	}
-	fmt.Println(userRes)
-	enc := json.NewEncoder(w)
-	err = enc.Encode(userRes)
-	if err != nil {
-		fmt.Fprint(w, err.Error())
-		return
-	}
-}
-
-type UserLogin struct {
-	Login    string
-	Password string
-}
-type Claims struct {
-	jwt.StandardClaims
-	Username string `json:"username"`
-	Id       string `json:"sub"`
 }
