@@ -1,9 +1,11 @@
-package main
+package services
 
 import (
 	"SimpleSSO/repository"
 	"crypto"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,8 +16,9 @@ import (
 )
 
 type AuthService struct {
-	db     *repository.Repository
-	secret string
+	db        *repository.Repository
+	secret    string
+	secretJwt string
 }
 type LoginDto struct {
 	RefreshToken repository.RefreshToken
@@ -26,7 +29,14 @@ type Token struct {
 	Expiration int64
 }
 
-func (a *AuthService) Login(w http.ResponseWriter, r *http.Request) {
+func New(db *repository.Repository, secret string, secretJwt string) (*AuthService, error) {
+	return &AuthService{
+		db:        db,
+		secret:    secret,
+		secretJwt: secretJwt,
+	}, nil
+}
+func (a *AuthService) LoginHttp(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	user := UserLogin{}
@@ -35,21 +45,11 @@ func (a *AuthService) Login(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, err.Error())
 		return
 	}
-	dbUser, err := a.db.GetUser(user.Login)
+	loginDto, err := a.login(user)
 	if err != nil {
 		fmt.Fprint(w, err.Error())
 		return
 	}
-	hash, err := a.GetHash(user.Password)
-	if err != nil {
-		fmt.Fprint(w, err.Error())
-		return
-	}
-	if dbUser.Password != hash {
-		fmt.Fprint(w, "invalid password")
-		return
-	}
-	loginDto, err := a.GetLoginData(dbUser.Id)
 	w.Header().Add("Content-Type", "application/json")
 	jen := json.NewEncoder(w)
 	err = jen.Encode(loginDto)
@@ -58,7 +58,22 @@ func (a *AuthService) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
-func (a *AuthService) RefreshToken(w http.ResponseWriter, r *http.Request) {
+func (a *AuthService) login(user UserLogin) (*LoginDto, error) {
+	dbUser, err := a.db.GetUser(user.Login)
+	if err != nil {
+		return nil, err
+	}
+	hash, err := a.GetHash(user.Password)
+	if err != nil {
+		return nil, err
+	}
+	if dbUser.Password != hash {
+		return nil, fmt.Errorf("invalid password")
+	}
+	return a.GetLoginData(dbUser.Id)
+
+}
+func (a *AuthService) RefreshTokenHttp(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	user := repository.RefreshToken{}
@@ -67,29 +82,34 @@ func (a *AuthService) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, err.Error())
 		return
 	}
-	rt, err := a.db.GetRefreshToken(user.Token)
+	w.Header().Add("Content-Type", "application/json")
+	jen := json.NewEncoder(w)
+	loginDto, err := a.refreshToken(user)
 	if err != nil {
 		fmt.Fprint(w, err.Error())
 		return
 	}
-	if rt.Expiration < time.Now().UnixMilli() {
-		fmt.Fprint(w, "expiration has expired")
-		return
-	}
-	if rt.UserId != user.UserId {
-		fmt.Fprint(w, "token isn't valid")
-		return
-	}
-	loginDto, err := a.GetLoginData(user.UserId)
-	w.Header().Add("Content-Type", "application/json")
-	jen := json.NewEncoder(w)
 	err = jen.Encode(loginDto)
 	if err != nil {
 		fmt.Fprint(w, err.Error())
 		return
 	}
 }
-func (a *AuthService) Registration(w http.ResponseWriter, r *http.Request) {
+func (a *AuthService) refreshToken(user repository.RefreshToken) (*LoginDto, error) {
+	rt, err := a.db.GetRefreshToken(user.Token)
+	if err != nil {
+		return nil, err
+	}
+	if rt.Expiration < time.Now().UnixMilli() {
+		return nil, fmt.Errorf("expiration has expired")
+	}
+	if rt.UserId != user.UserId {
+		return nil, fmt.Errorf("token isn't valid")
+	}
+	return a.GetLoginData(user.UserId)
+
+}
+func (a *AuthService) RegistrationHttp(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	user := UserLogin{}
@@ -98,15 +118,27 @@ func (a *AuthService) Registration(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, err.Error())
 		return
 	}
-	_, err = a.db.GetUser(user.Login)
-	if err == nil {
-		fmt.Fprint(w, "invalid data")
-		return
-	}
-	hash, err := a.GetHash(user.Password)
+	loginDto, err := a.registration(user)
 	if err != nil {
 		fmt.Fprint(w, err.Error())
 		return
+	}
+	w.Header().Add("Content-Type", "application/json")
+	jen := json.NewEncoder(w)
+	err = jen.Encode(loginDto)
+	if err != nil {
+		fmt.Fprint(w, err.Error())
+		return
+	}
+}
+func (a *AuthService) registration(user UserLogin) (*LoginDto, error) {
+	_, err := a.db.GetUser(user.Login)
+	if err == nil {
+		return nil, fmt.Errorf("invalid data")
+	}
+	hash, err := a.GetHash(user.Password)
+	if err != nil {
+		return nil, err
 	}
 	userdb := repository.User{
 		Login:    user.Login,
@@ -114,17 +146,10 @@ func (a *AuthService) Registration(w http.ResponseWriter, r *http.Request) {
 	}
 	userRes, err := a.db.SetUser(userdb)
 	if err != nil {
-		fmt.Fprint(w, err.Error())
-		return
+		return nil, err
 	}
-	w.Header().Add("Content-Type", "application/json")
-	loginDto, err := a.GetLoginData(userRes.Id)
-	jen := json.NewEncoder(w)
-	err = jen.Encode(loginDto)
-	if err != nil {
-		fmt.Fprint(w, err.Error())
-		return
-	}
+
+	return a.GetLoginData(userRes.Id)
 }
 func (a *AuthService) GetLoginData(userId int) (*LoginDto, error) {
 	exp := time.Now().Add(time.Hour * 24)
@@ -135,7 +160,7 @@ func (a *AuthService) GetLoginData(userId int) (*LoginDto, error) {
 		},
 		Id: uuid.New().String(),
 	})
-	tokenSign, err := token.SignedString([]byte("test"))
+	tokenSign, err := token.SignedString([]byte(a.secretJwt))
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +171,7 @@ func (a *AuthService) GetLoginData(userId int) (*LoginDto, error) {
 	}
 	rt := repository.RefreshToken{
 		UserId:     userId,
-		Token:      "test",
+		Token:      GenerateSecureToken(),
 		Expiration: time.Now().Add(time.Hour * 24 * 30).UnixMilli(),
 	}
 	rtRes, err := a.db.SetRefreshToken(rt)
@@ -156,7 +181,13 @@ func (a *AuthService) GetLoginData(userId int) (*LoginDto, error) {
 	loginDto.RefreshToken = *rtRes
 	return &loginDto, nil
 }
-
+func GenerateSecureToken() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
+}
 func (a *AuthService) GetHash(password string) (string, error) {
 	hash := crypto.SHA256.New()
 	_, err := hash.Write([]byte(password))

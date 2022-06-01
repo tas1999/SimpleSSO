@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"SimpleSSO/repository"
+	"SimpleSSO/services"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -17,10 +19,11 @@ type Config struct {
 }
 
 func main() {
-
 	viper.SetConfigName("config")
 	viper.AddConfigPath(".")
 	viper.AutomaticEnv()
+	replacer := strings.NewReplacer(".", "__")
+	viper.SetEnvKeyReplacer(replacer)
 	err := viper.ReadInConfig()
 	if err != nil {
 		fmt.Println(err.Error())
@@ -50,10 +53,14 @@ func main() {
 		fmt.Println(err.Error())
 		return
 	}
-	auth := AuthService{db: db, secret: "secret"}
-	http.HandleFunc("/login", auth.Login)
-	http.HandleFunc("/registration", auth.Registration)
-	http.HandleFunc("/refreshToken", auth.RefreshToken)
+	auth, err := services.New(db, "secret", "secretJwt")
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+	http.HandleFunc("/login", auth.LoginHttp)
+	http.HandleFunc("/registration", auth.RegistrationHttp)
+	http.HandleFunc("/refreshToken", auth.RefreshTokenHttp)
 	s := &http.Server{
 		Addr: ":8080",
 	}

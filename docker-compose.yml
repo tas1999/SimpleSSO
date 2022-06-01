@@ -1,0 +1,25 @@
+version: "3.2"
+services:
+  postgres:
+    image: postgres:latest
+    ports:
+      - "5430:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=simplesso 
+  simple_sso:
+    image: golang:1.18
+    volumes:
+      - .:/etc/simple_sso
+    working_dir: /etc/simple_sso
+    ports:
+      - "8080:8080"
+    environment:
+      - POSTGRES__PORT=5432
+      - POSTGRES__HOST=postgres 
+      - POSTGRES__USER=postgres
+      - POSTGRES__PASSWORD=postgres
+      - POSTGRES__DBNAME=simplesso
+    command: >
+      sh -c "go run ." 
