@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"SimpleSSO/cryptos"
 	"SimpleSSO/repository"
 	"SimpleSSO/services"
 
@@ -15,7 +16,8 @@ import (
 )
 
 type Config struct {
-	Postgres repository.PostgresConfig `json:"postgres"`
+	Postgres repository.PostgresConfig `mapstructure:"postgres"`
+	Cryptos  cryptos.Secret            `mapstructure:"cryptos"`
 }
 
 func main() {
@@ -35,6 +37,7 @@ func main() {
 		fmt.Println(err.Error())
 		return
 	}
+	fmt.Println(conf)
 	connStr := fmt.Sprintf("user=%s host=%s port=%d password=%s dbname=%s sslmode=%s",
 		conf.Postgres.Username, conf.Postgres.Host, conf.Postgres.Port, conf.Postgres.Password, conf.Postgres.DBName, conf.Postgres.SSLMode)
 	mconf := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
@@ -53,7 +56,7 @@ func main() {
 		fmt.Println(err.Error())
 		return
 	}
-	auth, err := services.New(db, "secret", "secretJwt")
+	auth, err := services.New(db, &conf.Cryptos)
 	if err != nil {
 		fmt.Println(err.Error())
 		return

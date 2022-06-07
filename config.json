@@ -6,5 +6,9 @@
         "password":"postgres",
         "dbname":"simplesso",
         "sslmode":"disable"
+    },
+    "cryptos":{
+       "password_secret": "secret",
+       "jwt_secret": "secretJwt"
     }
 }

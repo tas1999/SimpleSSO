@@ -2,9 +2,7 @@ package services
 
 import (
 	"SimpleSSO/repository"
-	"crypto"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,10 +13,13 @@ import (
 	"github.com/google/uuid"
 )
 
+type Crypt interface {
+	GetHash(string) (string, error)
+	GetJwt(jwt.Claims) (string, error)
+}
 type AuthService struct {
-	db        *repository.Repository
-	secret    string
-	secretJwt string
+	db    *repository.Repository
+	crypt Crypt
 }
 type LoginDto struct {
 	RefreshToken repository.RefreshToken
@@ -29,11 +30,10 @@ type Token struct {
 	Expiration int64
 }
 
-func New(db *repository.Repository, secret string, secretJwt string) (*AuthService, error) {
+func New(db *repository.Repository, crypt Crypt) (*AuthService, error) {
 	return &AuthService{
-		db:        db,
-		secret:    secret,
-		secretJwt: secretJwt,
+		db:    db,
+		crypt: crypt,
 	}, nil
 }
 func (a *AuthService) LoginHttp(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +63,7 @@ func (a *AuthService) login(user UserLogin) (*LoginDto, error) {
 	if err != nil {
 		return nil, err
 	}
-	hash, err := a.GetHash(user.Password)
+	hash, err := a.crypt.GetHash(user.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (a *AuthService) registration(user UserLogin) (*LoginDto, error) {
 	if err == nil {
 		return nil, fmt.Errorf("invalid data")
 	}
-	hash, err := a.GetHash(user.Password)
+	hash, err := a.crypt.GetHash(user.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -153,14 +153,13 @@ func (a *AuthService) registration(user UserLogin) (*LoginDto, error) {
 }
 func (a *AuthService) GetLoginData(userId int) (*LoginDto, error) {
 	exp := time.Now().Add(time.Hour * 24)
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &Claims{
+	tokenSign, err := a.crypt.GetJwt(&Claims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: jwt.At(exp),
 			IssuedAt:  jwt.At(time.Now()),
 		},
 		Id: uuid.New().String(),
 	})
-	tokenSign, err := token.SignedString([]byte(a.secretJwt))
 	if err != nil {
 		return nil, err
 	}
@@ -187,14 +186,6 @@ func GenerateSecureToken() string {
 		return ""
 	}
 	return hex.EncodeToString(b)
-}
-func (a *AuthService) GetHash(password string) (string, error) {
-	hash := crypto.SHA256.New()
-	_, err := hash.Write([]byte(password))
-	if err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(hash.Sum([]byte(a.secret))), nil
 }
 
 type UserLogin struct {
