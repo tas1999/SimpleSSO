@@ -2,8 +2,6 @@ package services
 
 import (
 	"SimpleSSO/repository"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,6 +14,7 @@ import (
 type Crypt interface {
 	GetHash(string) (string, error)
 	GetJwt(jwt.Claims) (string, error)
+	GenerateSecureToken() string
 }
 type AuthService struct {
 	db    *repository.Repository
@@ -170,7 +169,7 @@ func (a *AuthService) GetLoginData(userId int) (*LoginDto, error) {
 	}
 	rt := repository.RefreshToken{
 		UserId:     userId,
-		Token:      GenerateSecureToken(),
+		Token:      a.crypt.GenerateSecureToken(),
 		Expiration: time.Now().Add(time.Hour * 24 * 30).UnixMilli(),
 	}
 	rtRes, err := a.db.SetRefreshToken(rt)
@@ -179,13 +178,6 @@ func (a *AuthService) GetLoginData(userId int) (*LoginDto, error) {
 	}
 	loginDto.RefreshToken = *rtRes
 	return &loginDto, nil
-}
-func GenerateSecureToken() string {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return ""
-	}
-	return hex.EncodeToString(b)
 }
 
 type UserLogin struct {
