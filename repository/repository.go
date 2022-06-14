@@ -1,12 +1,14 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
 	"fmt"
 
 	_ "github.com/lib/pq"
+	"golang.org/x/sync/semaphore"
 )
 
 type PostgresConfig struct {
@@ -19,7 +21,8 @@ type PostgresConfig struct {
 }
 
 type Repository struct {
-	db *sql.DB
+	db  *sql.DB
+	sem *semaphore.Weighted
 }
 
 type User struct {
@@ -30,10 +33,18 @@ type User struct {
 
 func New(connStr string) (*Repository, error) {
 	db, err := sql.Open("postgres", connStr)
-	return &Repository{db: db}, err
+	return &Repository{
+		db:  db,
+		sem: semaphore.NewWeighted(int64(100)),
+	}, err
 }
 
 func (r *Repository) GetUser(login string) (*User, error) {
+	err := r.sem.Acquire(context.Background(), 1)
+	if err != nil {
+		return nil, err
+	}
+	defer r.sem.Release(1)
 	rows, err := r.db.Query("select id, login, password from users where login=$1", login)
 	if err != nil {
 		return nil, err
@@ -45,6 +56,11 @@ func (r *Repository) GetUser(login string) (*User, error) {
 	return &u, err
 }
 func (r *Repository) GetUserById(Id int) (*User, error) {
+	err := r.sem.Acquire(context.Background(), 1)
+	if err != nil {
+		return nil, err
+	}
+	defer r.sem.Release(1)
 	rows, err := r.db.Query("select id, login, password from users where id=$1", Id)
 	if err != nil {
 		return nil, err
@@ -56,14 +72,20 @@ func (r *Repository) GetUserById(Id int) (*User, error) {
 	return &u, err
 }
 func (r *Repository) SetUser(user User) (*User, error) {
-	row := r.db.QueryRow("INSERT INTO users (login,password) VALUES ($1,$2) returning id", user.Login, user.Password)
-	if row.Err() != nil {
-		fmt.Println("row.Err()")
-		return nil, row.Err()
-	}
-	err := row.Scan(&user.Id)
+	err := r.sem.Acquire(context.Background(), 1)
 	if err != nil {
-		fmt.Println("Scan err")
+		return nil, err
+	}
+	defer r.sem.Release(1)
+	row := r.db.QueryRow("INSERT INTO users (login,password) VALUES ($1,$2) returning id", user.Login, user.Password)
+	err = row.Err()
+	if err != nil {
+		fmt.Println("row.Err() SetUser ", err)
+		return nil, err
+	}
+	err = row.Scan(&user.Id)
+	if err != nil {
+		fmt.Println("Scan err SetUser")
 		return nil, err
 	}
 	return &user, nil
@@ -77,6 +99,11 @@ type RefreshToken struct {
 }
 
 func (r *Repository) GetRefreshToken(token string) (*RefreshToken, error) {
+	err := r.sem.Acquire(context.Background(), 1)
+	if err != nil {
+		return nil, err
+	}
+	defer r.sem.Release(1)
 	rows, err := r.db.Query("select id, user_id, token, expiration from refresh_tokens where token=$1", token)
 	if err != nil {
 		return nil, err
@@ -91,12 +118,18 @@ func (r *Repository) GetRefreshToken(token string) (*RefreshToken, error) {
 }
 func (r *Repository) SetRefreshToken(token RefreshToken) (*RefreshToken, error) {
 	timeEx := time.UnixMilli(token.Expiration)
-	row := r.db.QueryRow("INSERT INTO refresh_tokens (user_id, token, expiration) VALUES ($1,$2,$3) returning id", token.UserId, token.Token, timeEx)
-	if row.Err() != nil {
-		fmt.Println("row.Err()")
-		return nil, row.Err()
+	err := r.sem.Acquire(context.Background(), 1)
+	if err != nil {
+		return nil, err
 	}
-	err := row.Scan(&token.Id)
+	defer r.sem.Release(1)
+	row := r.db.QueryRow("INSERT INTO refresh_tokens (user_id, token, expiration) VALUES ($1,$2,$3) returning id", token.UserId, token.Token, timeEx)
+	err = row.Err()
+	if err != nil {
+		fmt.Println("row.Err() SetRefreshToken", err)
+		return nil, err
+	}
+	err = row.Scan(&token.Id)
 	if err != nil {
 		fmt.Println("Scan err")
 		return nil, err

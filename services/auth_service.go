@@ -16,8 +16,15 @@ type Crypt interface {
 	GetJwt(jwt.Claims) (string, error)
 	GenerateSecureToken() string
 }
+type Repository interface {
+	GetUser(login string) (*repository.User, error)
+	GetUserById(Id int) (*repository.User, error)
+	SetUser(user repository.User) (*repository.User, error)
+	GetRefreshToken(token string) (*repository.RefreshToken, error)
+	SetRefreshToken(token repository.RefreshToken) (*repository.RefreshToken, error)
+}
 type AuthService struct {
-	db    *repository.Repository
+	db    Repository
 	crypt Crypt
 }
 type LoginDto struct {
@@ -29,7 +36,7 @@ type Token struct {
 	Expiration int64
 }
 
-func New(db *repository.Repository, crypt Crypt) (*AuthService, error) {
+func New(db Repository, crypt Crypt) (*AuthService, error) {
 	return &AuthService{
 		db:    db,
 		crypt: crypt,
@@ -41,19 +48,19 @@ func (a *AuthService) LoginHttp(w http.ResponseWriter, r *http.Request) {
 	user := UserLogin{}
 	err := decoder.Decode(&user)
 	if err != nil {
-		fmt.Fprint(w, err.Error())
+		WriteError(w, err)
 		return
 	}
 	loginDto, err := a.login(user)
 	if err != nil {
-		fmt.Fprint(w, err.Error())
+		WriteError(w, err)
 		return
 	}
 	w.Header().Add("Content-Type", "application/json")
 	jen := json.NewEncoder(w)
 	err = jen.Encode(loginDto)
 	if err != nil {
-		fmt.Fprint(w, err.Error())
+		WriteError(w, err)
 		return
 	}
 }
@@ -78,19 +85,19 @@ func (a *AuthService) RefreshTokenHttp(w http.ResponseWriter, r *http.Request) {
 	user := repository.RefreshToken{}
 	err := decoder.Decode(&user)
 	if err != nil {
-		fmt.Fprint(w, err.Error())
+		WriteError(w, err)
 		return
 	}
 	w.Header().Add("Content-Type", "application/json")
 	jen := json.NewEncoder(w)
 	loginDto, err := a.refreshToken(user)
 	if err != nil {
-		fmt.Fprint(w, err.Error())
+		WriteError(w, err)
 		return
 	}
 	err = jen.Encode(loginDto)
 	if err != nil {
-		fmt.Fprint(w, err.Error())
+		WriteError(w, err)
 		return
 	}
 }
@@ -114,19 +121,19 @@ func (a *AuthService) RegistrationHttp(w http.ResponseWriter, r *http.Request) {
 	user := UserLogin{}
 	err := decoder.Decode(&user)
 	if err != nil {
-		fmt.Fprint(w, err.Error())
+		WriteError(w, err)
 		return
 	}
 	loginDto, err := a.registration(user)
 	if err != nil {
-		fmt.Fprint(w, err.Error())
+		WriteError(w, err)
 		return
 	}
 	w.Header().Add("Content-Type", "application/json")
 	jen := json.NewEncoder(w)
 	err = jen.Encode(loginDto)
 	if err != nil {
-		fmt.Fprint(w, err.Error())
+		WriteError(w, err)
 		return
 	}
 }
@@ -188,4 +195,9 @@ type Claims struct {
 	jwt.StandardClaims
 	Username string `json:"username"`
 	Id       string `json:"sub"`
+}
+
+func WriteError(w http.ResponseWriter, err error) {
+	w.WriteHeader(500)
+	fmt.Fprint(w, err.Error())
 }
