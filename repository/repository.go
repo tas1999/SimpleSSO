@@ -3,10 +3,12 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"fmt"
 
+	"github.com/go-redis/redis/v8"
 	_ "github.com/lib/pq"
 	"golang.org/x/sync/semaphore"
 )
@@ -23,6 +25,7 @@ type PostgresConfig struct {
 type Repository struct {
 	db  *sql.DB
 	sem *semaphore.Weighted
+	rdb *redis.Client
 }
 
 type User struct {
@@ -31,11 +34,19 @@ type User struct {
 	Password string
 }
 
-func New(connStr string) (*Repository, error) {
+func New(conf PostgresConfig) (*Repository, error) {
+	connStr := fmt.Sprintf("user=%s host=%s port=%d password=%s dbname=%s sslmode=%s",
+		conf.Username, conf.Host, conf.Port, conf.Password, conf.DBName, conf.SSLMode)
 	db, err := sql.Open("postgres", connStr)
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "redis:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
 	return &Repository{
 		db:  db,
-		sem: semaphore.NewWeighted(int64(100)),
+		sem: semaphore.NewWeighted(int64(90)),
+		rdb: rdb,
 	}, err
 }
 
@@ -98,7 +109,7 @@ type RefreshToken struct {
 	Expiration int64
 }
 
-func (r *Repository) GetRefreshToken(token string) (*RefreshToken, error) {
+func (r *Repository) GetRefreshTokenOld(token string) (*RefreshToken, error) {
 	err := r.sem.Acquire(context.Background(), 1)
 	if err != nil {
 		return nil, err
@@ -116,7 +127,28 @@ func (r *Repository) GetRefreshToken(token string) (*RefreshToken, error) {
 	rt.Expiration = timeEx.UnixMilli()
 	return &rt, err
 }
+func (r *Repository) GetRefreshToken(token string) (*RefreshToken, error) {
+	ctx := context.Background()
+	rc := r.rdb.Get(ctx, "refresh_token_"+token)
+	tk, err := rc.Result()
+	if err != nil {
+		return nil, err
+	}
+	var rt RefreshToken
+	err = json.Unmarshal([]byte(tk), &rt)
+	return &rt, err
+}
 func (r *Repository) SetRefreshToken(token RefreshToken) (*RefreshToken, error) {
+	ctx := context.Background()
+	json, err := json.Marshal(token)
+	if err != nil {
+		return nil, err
+	}
+	rc := r.rdb.Set(ctx, "refresh_token_"+token.Token, string(json), time.Minute)
+	err = rc.Err()
+	return &token, err
+}
+func (r *Repository) SetRefreshTokenOld(token RefreshToken) (*RefreshToken, error) {
 	timeEx := time.UnixMilli(token.Expiration)
 	err := r.sem.Acquire(context.Background(), 1)
 	if err != nil {

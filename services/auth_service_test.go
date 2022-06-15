@@ -1,6 +1,7 @@
 package services
 
 import (
+	"SimpleSSO/cryptos"
 	"SimpleSSO/repository"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 
 func TestLogin_200(t *testing.T) {
 	cont := gomock.NewController(t)
+	defer cont.Finish()
 	rep := NewMockRepository(cont)
 	cr := NewMockCrypt(cont)
 	hash := "hash"
@@ -43,5 +45,38 @@ func TestLogin_200(t *testing.T) {
 	assert.Equal(t, rtoken, lg.RefreshToken.Token)
 	assert.Equal(t, rftoken.UserId, lg.RefreshToken.UserId)
 	assert.Equal(t, rftoken.Id, lg.RefreshToken.Id)
+}
+func BenchmarkLogin(b *testing.B) {
+	cont := gomock.NewController(b)
+	defer cont.Finish()
+	rep := NewMockRepository(cont)
+	cr := cryptos.Secret{
+		PasswordSecret: "secret",
+		JwtSecret:      "secretJwt",
+	}
 
+	password := "password"
+	hash, err := cr.GetHash(password)
+	assert.Nil(b, err)
+	rtoken := "rtoken"
+	user := repository.User{
+		Login:    "login",
+		Password: hash,
+		Id:       1,
+	}
+	rftoken := repository.RefreshToken{
+		Id:     1,
+		Token:  rtoken,
+		UserId: user.Id,
+	}
+	rep.EXPECT().GetUser(user.Login).Return(&user, nil).AnyTimes()
+	rep.EXPECT().SetRefreshToken(gomock.Any()).Return(&rftoken, nil).AnyTimes()
+	auth, err := New(rep, &cr)
+	assert.Nil(b, err)
+	for i := 0; i < b.N; i++ {
+		_, _ = auth.login(UserLogin{
+			Login:    user.Login,
+			Password: password,
+		})
+	}
 }

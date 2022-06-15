@@ -38,8 +38,7 @@ func main() {
 		return
 	}
 	fmt.Println(conf)
-	connStr := fmt.Sprintf("user=%s host=%s port=%d password=%s dbname=%s sslmode=%s",
-		conf.Postgres.Username, conf.Postgres.Host, conf.Postgres.Port, conf.Postgres.Password, conf.Postgres.DBName, conf.Postgres.SSLMode)
+
 	mconf := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		conf.Postgres.Username, conf.Postgres.Password, conf.Postgres.Host, conf.Postgres.Port, conf.Postgres.DBName, conf.Postgres.SSLMode)
 	fmt.Println(mconf)
@@ -51,7 +50,7 @@ func main() {
 		return
 	}
 	m.Up()
-	db, err := repository.New(connStr)
+	db, err := repository.New(conf.Postgres)
 	if err != nil {
 		fmt.Println(err.Error())
 		return

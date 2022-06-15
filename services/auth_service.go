@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go/v4"
-	"github.com/google/uuid"
 )
 
 type Crypt interface {
@@ -164,7 +163,7 @@ func (a *AuthService) GetLoginData(userId int) (*LoginDto, error) {
 			ExpiresAt: jwt.At(exp),
 			IssuedAt:  jwt.At(time.Now()),
 		},
-		Id: uuid.New().String(),
+		Id: fmt.Sprint(userId),
 	})
 	if err != nil {
 		return nil, err
