@@ -26,6 +26,8 @@ services:
       - POSTGRES__USER=postgres
       - POSTGRES__PASSWORD=postgres
       - POSTGRES__DBNAME=simplesso
+      - REDIS__HOST=redis
+      - REDIS__PORT=6379
     depends_on:
             - postgres
             - redis

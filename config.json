@@ -7,8 +7,19 @@
         "dbname":"simplesso",
         "sslmode":"disable"
     },
+    "redis":{
+        "host":"127.0.0.1",
+        "port":"6379",
+        "user":"",
+        "password":"",
+        "db":0
+    },
     "cryptos":{
        "password_secret": "secret",
        "jwt_secret": "secretJwt"
+    },
+    "zap_config":{
+        "encoding":         "json",
+        "level":            -1        
     }
 }

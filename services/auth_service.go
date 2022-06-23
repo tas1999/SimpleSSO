@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go/v4"
+	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 type Crypt interface {
@@ -19,12 +22,16 @@ type Repository interface {
 	GetUser(login string) (*repository.User, error)
 	GetUserById(Id int) (*repository.User, error)
 	SetUser(user repository.User) (*repository.User, error)
+}
+type RefreshService interface {
 	GetRefreshToken(token string) (*repository.RefreshToken, error)
 	SetRefreshToken(token repository.RefreshToken) (*repository.RefreshToken, error)
 }
 type AuthService struct {
-	db    Repository
-	crypt Crypt
+	db     Repository
+	rdb    RefreshService
+	crypt  Crypt
+	logger *logr.Logger
 }
 type LoginDto struct {
 	RefreshToken repository.RefreshToken
@@ -35,31 +42,34 @@ type Token struct {
 	Expiration int64
 }
 
-func New(db Repository, crypt Crypt) (*AuthService, error) {
+func New(db Repository, rdb RefreshService, crypt Crypt, logger *logr.Logger) (*AuthService, error) {
 	return &AuthService{
-		db:    db,
-		crypt: crypt,
+		db:     db,
+		rdb:    rdb,
+		crypt:  crypt,
+		logger: logger,
 	}, nil
 }
 func (a *AuthService) LoginHttp(w http.ResponseWriter, r *http.Request) {
+	opsLogin.Inc()
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	user := UserLogin{}
 	err := decoder.Decode(&user)
 	if err != nil {
-		WriteError(w, err)
+		a.WriteError(w, err)
 		return
 	}
 	loginDto, err := a.login(user)
 	if err != nil {
-		WriteError(w, err)
+		a.WriteError(w, err)
 		return
 	}
 	w.Header().Add("Content-Type", "application/json")
 	jen := json.NewEncoder(w)
 	err = jen.Encode(loginDto)
 	if err != nil {
-		WriteError(w, err)
+		a.WriteError(w, err)
 		return
 	}
 }
@@ -79,29 +89,30 @@ func (a *AuthService) login(user UserLogin) (*LoginDto, error) {
 
 }
 func (a *AuthService) RefreshTokenHttp(w http.ResponseWriter, r *http.Request) {
+	opsRefreshToken.Inc()
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	user := repository.RefreshToken{}
 	err := decoder.Decode(&user)
 	if err != nil {
-		WriteError(w, err)
+		a.WriteError(w, err)
 		return
 	}
 	w.Header().Add("Content-Type", "application/json")
 	jen := json.NewEncoder(w)
 	loginDto, err := a.refreshToken(user)
 	if err != nil {
-		WriteError(w, err)
+		a.WriteError(w, err)
 		return
 	}
 	err = jen.Encode(loginDto)
 	if err != nil {
-		WriteError(w, err)
+		a.WriteError(w, err)
 		return
 	}
 }
 func (a *AuthService) refreshToken(user repository.RefreshToken) (*LoginDto, error) {
-	rt, err := a.db.GetRefreshToken(user.Token)
+	rt, err := a.rdb.GetRefreshToken(user.Token)
 	if err != nil {
 		return nil, err
 	}
@@ -120,19 +131,19 @@ func (a *AuthService) RegistrationHttp(w http.ResponseWriter, r *http.Request) {
 	user := UserLogin{}
 	err := decoder.Decode(&user)
 	if err != nil {
-		WriteError(w, err)
+		a.WriteError(w, err)
 		return
 	}
 	loginDto, err := a.registration(user)
 	if err != nil {
-		WriteError(w, err)
+		a.WriteError(w, err)
 		return
 	}
 	w.Header().Add("Content-Type", "application/json")
 	jen := json.NewEncoder(w)
 	err = jen.Encode(loginDto)
 	if err != nil {
-		WriteError(w, err)
+		a.WriteError(w, err)
 		return
 	}
 }
@@ -178,7 +189,7 @@ func (a *AuthService) GetLoginData(userId int) (*LoginDto, error) {
 		Token:      a.crypt.GenerateSecureToken(),
 		Expiration: time.Now().Add(time.Hour * 24 * 30).UnixMilli(),
 	}
-	rtRes, err := a.db.SetRefreshToken(rt)
+	rtRes, err := a.rdb.SetRefreshToken(rt)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +207,18 @@ type Claims struct {
 	Id       string `json:"sub"`
 }
 
-func WriteError(w http.ResponseWriter, err error) {
+func (a *AuthService) WriteError(w http.ResponseWriter, err error) {
 	w.WriteHeader(500)
 	fmt.Fprint(w, err.Error())
 }
+
+var (
+	opsLogin = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "simplesso_login_ops_total",
+		Help: "The total number of loging events",
+	})
+	opsRefreshToken = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "simplesso_refresh_token_ops_total",
+		Help: "The total number of refresh token events",
+	})
+)
