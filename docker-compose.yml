@@ -10,9 +10,10 @@ services:
       - POSTGRES_DB=simplesso 
   redis:
     image: "redis"
-    command: redis-server
+    command: redis-server --save "" --appendonly no
     ports:
       - "6379:6379"
+    
   simple_sso:
     image: golang:1.18
     volumes:
