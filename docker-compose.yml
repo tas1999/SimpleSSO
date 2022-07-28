@@ -27,6 +27,11 @@ services:
       - POSTGRES__USER=postgres
       - POSTGRES__PASSWORD=postgres
       - POSTGRES__DBNAME=simplesso
+      - MIGRATION__PORT=5432
+      - MIGRATION__HOST=postgres 
+      - MIGRATION__USER=postgres
+      - MIGRATION__PASSWORD=postgres
+      - MIGRATION__DBNAME=simplesso
       - REDIS__HOST=redis
       - REDIS__PORT=6379
     depends_on:

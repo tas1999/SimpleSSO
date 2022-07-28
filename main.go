@@ -4,92 +4,32 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
-	"SimpleSSO/cryptos"
+	"SimpleSSO/config"
+	"SimpleSSO/logger"
 	"SimpleSSO/repository"
 	"SimpleSSO/services"
 
-	"github.com/go-logr/logr"
-	"github.com/go-logr/zapr"
-	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/spf13/viper"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
-type Config struct {
-	Postgres    repository.PostgresConfig `mapstructure:"postgres"`
-	Cryptos     cryptos.Secret            `mapstructure:"cryptos"`
-	ZapConfig   *ZapConfig                `mapstructure:"zap_config"`
-	RedisConfig repository.RedisConfig    `mapstructure:"redis"`
-}
-type ZapConfig struct {
-	Encoding string `mapstructure:"encoding"`
-	Level    int8   `mapstructure:"level"`
-}
-
-func NewLog(conf *ZapConfig) (*logr.Logger, error) {
-	var logger logr.Logger
-	if conf == nil {
-		conf = &ZapConfig{
-			Level:    int8(zapcore.InfoLevel),
-			Encoding: "json",
-		}
-	}
-	atom := zap.NewAtomicLevelAt(zapcore.Level(conf.Level))
-	zapConf := zap.NewProductionConfig()
-	zapConf.Encoding = conf.Encoding
-	zapConf.Level = atom
-	zapLog, err := zapConf.Build()
-	defer zapLog.Sync()
-	if err != nil {
-		return nil, err
-	}
-	logger = zapr.NewLogger(zapLog)
-	return &logger, nil
-}
-
 func main() {
-	viper.SetConfigName("config")
-	viper.AddConfigPath(".")
-	viper.AutomaticEnv()
-	replacer := strings.NewReplacer(".", "__")
-	viper.SetEnvKeyReplacer(replacer)
-	err := viper.ReadInConfig()
+	conf, err := config.GetConfig()
 	if err != nil {
 		fmt.Println("viper read in config error", err.Error())
 		return
 	}
-	conf := &Config{}
-	err = viper.Unmarshal(conf)
-	if err != nil {
-		fmt.Println(context.Background(), "viper unmarshal error", err.Error())
-		return
-	}
-	logger, err := NewLog(conf.ZapConfig)
+	logger, err := logger.NewLog(conf.ZapConfig)
 	if err != nil {
 		fmt.Println(context.Background(), "zap log error", err.Error())
 		return
 	}
-	logger.Info("conf", "conf", conf)
-
-	mconf := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		conf.Postgres.Username, conf.Postgres.Password, conf.Postgres.Host, conf.Postgres.Port, conf.Postgres.DBName, conf.Postgres.SSLMode)
-	logger.Info(mconf)
-	m, err := migrate.New(
-		"file://migrations",
-		mconf)
+	err = migrateUp(conf.Migrations)
 	if err != nil {
-		logger.Error(err, "create migrations error")
-		return
-	}
-	err = m.Up()
-	if err != nil {
-		logger.Error(err, "migrations up error")
+		logger.Error(err, "migrate up error")
 	}
 	db, err := repository.New(conf.Postgres, logger)
 	if err != nil {
@@ -97,6 +37,10 @@ func main() {
 		return
 	}
 	rdb, err := repository.NewRedis(conf.RedisConfig, logger)
+	if err != nil {
+		logger.Error(err, "create redis services error")
+		return
+	}
 	auth, err := services.New(db, rdb, &conf.Cryptos, logger)
 	if err != nil {
 		logger.Error(err, "create services error")
@@ -111,4 +55,19 @@ func main() {
 	}
 	err = s.ListenAndServe()
 	logger.Error(err, "listen and serve error")
+}
+func parseConf(conf repository.PostgresConfig) string {
+	mconf := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		conf.Username, conf.Password, conf.Host, conf.Port, conf.DBName, conf.SSLMode)
+	return mconf
+}
+func migrateUp(conf repository.PostgresConfig) error {
+	m, err := migrate.New(
+		"file://migrations",
+		parseConf(conf))
+	if err != nil {
+		return err
+	}
+	err = m.Up()
+	return err
 }

@@ -7,6 +7,14 @@
         "dbname":"simplesso",
         "sslmode":"disable"
     },
+    "migration": {
+        "user":"postgres",
+        "host":"127.0.0.1",
+        "port":5430,
+        "password":"postgres",
+        "dbname":"simplesso",
+        "sslmode":"disable"
+    },
     "redis":{
         "host":"127.0.0.1",
         "port":"6379",
