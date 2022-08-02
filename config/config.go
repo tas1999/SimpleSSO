@@ -11,7 +11,7 @@ import (
 
 type Config struct {
 	Postgres    repository.PostgresConfig `mapstructure:"postgres"`
-	Migrations  repository.PostgresConfig `mapstructure:"migrations"`
+	Migrations  repository.PostgresConfig `mapstructure:"migration"`
 	Cryptos     cryptos.Secret            `mapstructure:"cryptos"`
 	ZapConfig   *logger.ZapConfig         `mapstructure:"zap_config"`
 	RedisConfig repository.RedisConfig    `mapstructure:"redis"`

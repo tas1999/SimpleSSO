@@ -10,7 +10,7 @@ import (
 	"SimpleSSO/repository"
 	"SimpleSSO/services"
 
-	"github.com/golang-migrate/migrate"
+	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -30,6 +30,9 @@ func main() {
 	err = migrateUp(conf.Migrations)
 	if err != nil {
 		logger.Error(err, "migrate up error")
+		if err.Error() != "no change" {
+			return
+		}
 	}
 	db, err := repository.New(conf.Postgres, logger)
 	if err != nil {
