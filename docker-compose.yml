@@ -1,5 +1,24 @@
 version: "3.2"
 services:
+  plugins:
+    image: golang:1.16.4 
+    volumes:
+      - .:/etc/test
+    working_dir: /etc/test
+    command: > 
+      sh -c "go mod download github.com/onsi/ginkgo &&
+             go build -buildmode=plugin -o plugins/test.so test_plugin/test.go"
+  test:
+    image: golang:1.16.4 
+    volumes:
+      - .:/etc/test
+    working_dir: /etc/test
+    command: > 
+      sh -c "go mod download github.com/onsi/ginkgo &&
+             go test "data_invoker/data_invoker_test.go" "data_invoker/data_invoker.go" -coverprofile=cover_data_invoker.out &&
+             go tool cover -html=cover_data_invoker.out -o cover_data_invoker.html"
+    depends_on:
+            - plugins
   postgres:
     image: postgres:latest
     # ports:
@@ -37,5 +56,6 @@ services:
     depends_on:
             - postgres
             - redis
+            - test
     command: >
       sh -c "go run ." 

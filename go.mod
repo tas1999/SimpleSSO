@@ -11,11 +11,11 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.15.2
 	github.com/golang/mock v1.6.0
 	github.com/lib/pq v1.10.5
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/spf13/viper v1.12.0
 	github.com/stretchr/testify v1.7.1
 	go.uber.org/zap v1.19.0
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/sync v0.0.0-20220513210516-0976fa681c29
 )
 
 require (
