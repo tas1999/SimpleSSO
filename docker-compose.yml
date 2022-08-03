@@ -27,11 +27,21 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=simplesso 
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 20000
+        hard: 40000
   redis:
     image: "redis"
     command: redis-server --save "" --appendonly no
     ports:
       - "6379:6379"
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 20000
+        hard: 40000
     
   simple_sso:
     image: golang:1.18
@@ -59,3 +69,8 @@ services:
             - test
     command: >
       sh -c "go run ." 
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 20000
+        hard: 40000
