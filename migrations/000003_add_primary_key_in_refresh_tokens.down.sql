@@ -1,0 +1,2 @@
+ALTER TABLE refresh_tokens
+DROP PRIMARY KEY (Id);
