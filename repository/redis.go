@@ -30,6 +30,7 @@ func NewRedis(conf RedisConfig, logger *logr.Logger) (*Redis, error) {
 		Addr:     fmt.Sprintf("%s:%d", rconf.Host, rconf.Port),
 		Password: rconf.Password, // no password set
 		DB:       rconf.DB,       // use default DB
+		PoolSize: 550,
 	})
 	return &Redis{
 		rdb:    rdb,
