@@ -1,4 +1,4 @@
-module SimpleSSO
+module github.com/tas1999/SimpleSSO
 
 go 1.18
 
