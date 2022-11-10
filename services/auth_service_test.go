@@ -1,9 +1,11 @@
 package services
 
 import (
-	"SimpleSSO/cryptos"
-	"SimpleSSO/repository"
 	"testing"
+
+	"github.com/tas1999/SimpleSSO/repository"
+
+	"github.com/tas1999/SimpleSSO/cryptos"
 
 	"github.com/go-logr/logr/funcr"
 	"github.com/golang/mock/gomock"

@@ -1,10 +1,11 @@
 package config
 
 import (
-	"SimpleSSO/cryptos"
-	"SimpleSSO/logger"
-	"SimpleSSO/repository"
 	"strings"
+
+	"github.com/tas1999/SimpleSSO/cryptos"
+	"github.com/tas1999/SimpleSSO/logger"
+	"github.com/tas1999/SimpleSSO/repository"
 
 	"github.com/spf13/viper"
 )

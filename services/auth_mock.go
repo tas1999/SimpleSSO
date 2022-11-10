@@ -5,7 +5,7 @@
 package services
 
 import (
-	repository "SimpleSSO/repository"
+	repository "github.com/tas1999/SimpleSSO/repository"
 	reflect "reflect"
 
 	jwt "github.com/dgrijalva/jwt-go/v4"

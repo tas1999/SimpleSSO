@@ -1,6 +1,6 @@
 package main
 
-import "SimpleSSO/provider"
+import "github.com/tas1999/SimpleSSO/provider"
 
 var Factory TestProviderFactory
 

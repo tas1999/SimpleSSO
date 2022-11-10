@@ -1,13 +1,14 @@
 package main
 
 import (
-	"SimpleSSO/config"
-	"SimpleSSO/logger"
-	"SimpleSSO/repository"
-	"SimpleSSO/services"
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/tas1999/SimpleSSO/config"
+	"github.com/tas1999/SimpleSSO/logger"
+	"github.com/tas1999/SimpleSSO/repository"
+	"github.com/tas1999/SimpleSSO/services"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"

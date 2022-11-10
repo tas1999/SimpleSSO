@@ -1,10 +1,11 @@
 package datainvok
 
 import (
-	"SimpleSSO/provider"
 	"fmt"
 	"os"
 	"plugin"
+
+	"github.com/tas1999/SimpleSSO/provider"
 )
 
 //type ProviderFactory func(conf map[string]interface{}) (Provider, error)

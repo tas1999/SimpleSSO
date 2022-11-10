@@ -1,11 +1,12 @@
 package services
 
 import (
-	"SimpleSSO/repository"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/tas1999/SimpleSSO/repository"
 
 	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/go-logr/logr"
